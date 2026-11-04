@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚊 Tramway Casablanca - Carte Interactive</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        body { display: flex; height: 100vh; overflow: hidden; }
+        
+        #sidebar { width: 400px; background: white; box-shadow: 2px 0 10px rgba(0,0,0,0.1); display: flex; flex-direction: column; z-index: 1000; }
+        #sidebar-header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 20px; }
+        #sidebar-header h1 { font-size: 20px; margin-bottom: 5px; }
+        #sidebar-header p { font-size: 13px; opacity: 0.9; }
+        #sidebar-content { flex: 1; overflow-y: auto; padding: 20px; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 5px; }
+        .form-group input, .form-group select { 
+            width: 100%; padding: 10px 12px; border: 2px solid #e0e0e0; 
+            border-radius: 8px; font-size: 14px; background: white; cursor: pointer;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #2a5298; }
+        
+        .autocomplete-wrapper { position: relative; }
+        .autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 2px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px; max-height: 200px; overflow-y: auto; display: none; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .autocomplete-list.show { display: block; }
+        .autocomplete-item { padding: 10px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+        .autocomplete-item:hover { background: #f0f4ff; }
+        .autocomplete-item:last-child { border-bottom: none; }
+        .autocomplete-item .station-name { font-weight: 600; color: #333; }
+        .autocomplete-item .station-lines { font-size: 11px; color: #666; margin-top: 2px; }
+        
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3); }
+        .btn-secondary { background: #f0f0f0; color: #333; margin-top: 8px; }
+        .btn-secondary:hover { background: #e0e0e0; }
+        .btn-success { background: linear-gradient(135deg, #11998e, #38ef7d); color: white; margin-top: 8px; }
+        .btn-success:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        #result { margin-top: 20px; display: none; }
+        #result.show { display: block; }
+        .result-header { background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        .result-header h3 { color: #2e7d32; font-size: 16px; margin-bottom: 8px; }
+        .result-stats { display: flex; gap: 15px; font-size: 12px; color: #555; }
+        
+        .step { background: #f9f9f9; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ccc; }
+        .step.ride { border-left-color: #2196f3; }
+        .step.transfer { border-left-color: #ff9800; background: #fff3e0; }
+        .step-title { font-weight: 600; font-size: 13px; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+        .line-badge { padding: 2px 8px; border-radius: 4px; color: white; font-size: 11px; font-weight: 700; }
+        .step-detail { font-size: 12px; color: #666; margin-top: 5px; }
+        
+        .stations-list { margin-top: 8px; font-size: 11px; color: #555; max-height: 150px; overflow-y: auto; padding-left: 5px; }
+        .station-item { padding: 3px 0; display: flex; align-items: center; gap: 5px; }
+        .station-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+        .station-item.start .station-dot { background: #4caf50; }
+        .station-item.end .station-dot { background: #f44336; }
+        
+        #map { flex: 1; z-index: 1; }
+        
+        #legend { position: absolute; bottom: 20px; right: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000; font-size: 12px; }
+        #legend h4 { margin-bottom: 10px; font-size: 13px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+        .legend-color { width: 20px; height: 4px; border-radius: 2px; }
+        
+        .loader { display: none; text-align: center; padding: 20px; }
+        .loader.show { display: block; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #2a5298; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .station-label { background: transparent !important; border: none !important; }
+        .station-label > div { background: rgba(255, 255, 255, 0.95); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; color: #333; white-space: nowrap; border: 1px solid #ddd; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: all 0.2s; }
+        .station-label:hover > div { transform: scale(1.15); background: #1e3c72; color: white; border-color: #1e3c72; z-index: 9999; }
+        
+        .station-marker { background: transparent !important; border: none !important; }
+        .correspondance-marker { background: transparent !important; border: none !important; }
+        .correspondance-marker > div { animation: pulse 2s infinite; }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+        
+        .custom-marker { background: transparent !important; border: none !important; }
+        
+        #author-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(30, 60, 114, 0.96), rgba(42, 82, 152, 0.96));
+            color: white;
+            padding: 18px 22px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            min-width: 340px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.3s;
+        }
+        
+        #author-panel:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+        
+        #author-panel .author-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        #author-panel .author-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #38ef7d, #11998e);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            flex-shrink: 0;
+        }
+        
+        #author-panel .author-info h3 { font-size: 14px; margin: 0 0 3px 0; color: white; font-weight: 700; letter-spacing: 0.3px; }
+        #author-panel .author-info p { font-size: 9px; margin: 0; color: rgba(255, 255, 255, 0.85); line-height: 1.5; }
+        #author-panel .author-info p:first-of-type { font-weight: 600; color: #38ef7d; margin-bottom: 3px; }
+        
+        #author-panel .author-location { font-size: 11px; color: rgba(255, 255, 255, 0.8); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+        
+        #author-panel .social-links { display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        #author-panel .social-links a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.12);
+            color: white;
+            text-decoration: none;
+            font-size: 15px;
+            transition: all 0.2s;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        
+        #author-panel .social-links a:hover { transform: translateY(-2px) scale(1.1); }
+        #author-panel .social-links a.linkedin:hover { background: #0077b5; border-color: #0077b5; }
+        #author-panel .social-links a.github:hover { background: #333; border-color: #333; }
+        #author-panel .social-links a.twitter:hover { background: #000; border-color: #000; }
+        #author-panel .social-links a.website:hover { background: #38ef7d; border-color: #38ef7d; color: #1e3c72; }
+        #author-panel .social-links a.email:hover { background: #ea4335; border-color: #ea4335; }
+        #author-panel .social-links a.phone:hover { background: #25d366; border-color: #25d366; }
+        
+        #author-panel .author-close {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: white;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        #author-panel .author-close:hover { background: rgba(255, 255, 255, 0.35); transform: rotate(90deg); }
+        
+        @media (max-width: 1200px) { #author-panel { display: none; } }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div id="sidebar-header">
+        <h1>🚊 Tramway Casablanca</h1>
+        <p>Calculateur d'itinéraire T1-T4 & BW1-BW2</p>
+    </div>
+    
+    <div id="sidebar-content">
+        <div class="form-group">
+            <label>📍 Station de départ</label>
+            <div class="autocomplete-wrapper">
+                <input type="text" id="start-input" placeholder="Ex: Aïn Diab" autocomplete="off">
+                <div class="autocomplete-list" id="start-list"></div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>🎯 Station d'arrivée</label>
+            <div class="autocomplete-wrapper">
+                <input type="text" id="end-input" placeholder="Ex: Faculté Ben M'Sick" autocomplete="off">
+                <div class="autocomplete-list" id="end-list"></div>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>🗺️ Fond de carte</label>
+            <select id="basemap-select" onchange="changeBasemap()">
+                <option value="osm">🗺️ OpenStreetMap</option>
+                <option value="esri_satellite">📡 Esri Satellite (Photos réelles)</option>
+                <option value="esri_street">🛣️ Esri Street Map</option>
+                <option value="esri_topo">⛰️ Esri Topographique</option>
+                <option value="opentopo">🏔️ OpenTopoMap</option>
+                <option value="stamen_toner">⚫ Stamen Toner (N&B)</option>
+            </select>
+        </div>
+        
+        <button class="btn btn-primary" onclick="calculateRoute()">🗺️ Calculer l'itinéraire</button>
+        <button class="btn btn-secondary" onclick="resetRoute()">🔄 Réinitialiser</button>
+        <button class="btn btn-secondary" onclick="locateMe()">📍 Ma position GPS</button>
+        <button class="btn btn-success" onclick="downloadPDF()" id="download-btn">📄 Télécharger le PDF</button>
+        
+        <div class="loader" id="loader">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px; color: #666; font-size: 13px;">Calcul en cours...</p>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+</div>
+
+<div id="map"></div>
+
+<div id="author-panel">
+    <button class="author-close" onclick="document.getElementById('author-panel').style.display='none'" title="Fermer">
+        <i class="fas fa-times"></i>
+    </button>
+    
+    <div class="author-header">
+        <div class="author-avatar"><i class="fas fa-user-graduate"></i></div>
+        <div class="author-info">
+            <h3>Mohamed AIT ABDELMALIK</h3>
+            <p>MSc Geoinformatics @UH2C</p>
+            <p>Geospatial Data Science | GeoAI & ML</p>
+            <p>GIS & Remote Sensing | Geospatial Computing</p>
+            <p>Spatial Intelligence</p>
+        </div>
+    </div>
+    
+    <div class="author-location">
+        <i class="fas fa-map-marker-alt"></i>
+        <span>Casablanca Metropolitan Area</span>
+    </div>
+    
+    <div class="social-links">
+        <a href="mailto:mohamed.aitabdelmalik@gmail.com" class="email" title="Email" target="_blank"><i class="fas fa-envelope"></i></a>
+        <a href="tel:+212651853618" class="phone" title="Téléphone" target="_blank"><i class="fas fa-phone"></i></a>
+        <a href="https://www.linkedin.com/in/mohamed-ait-abdelmalik-a7b468195/" class="linkedin" title="LinkedIn" target="_blank"><i class="fab fa-linkedin-in"></i></a>
+        <a href="https://github.com/mohamed-aitabdelmalik" class="github" title="GitHub" target="_blank"><i class="fab fa-github"></i></a>
+        <a href="https://x.com/MoAitAbdelmalik" class="twitter" title="Twitter/X" target="_blank"><i class="fab fa-twitter"></i></a>
+        <a href="https://mohamed-ait-abdelmalik.site/" class="website" title="Portfolio" target="_blank"><i class="fas fa-globe"></i></a>
+    </div>
+</div>
+
+<div id="legend">
+    <h4>🚊 Lignes</h4>
+    <div id="legend-content"></div>
+    <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+        <h4>🚏 Stations</h4>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 11px;">
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: white; border: 2px solid #333;"></div>
+            <span>Station normale</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 11px;">
+            <div style="width: 20px; height: 20px; border-radius: 50%; background: #ff9800; border: 2px solid white; display: flex; align-items: center; justify-content: center;">
+                <i class="fas fa-exchange-alt" style="color: white; font-size: 9px;"></i>
+            </div>
+            <span>Correspondance</span>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+const BASEMAPS = {
+    'osm': { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap', maxZoom: 19 },
+    'esri_satellite': { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: '© Esri', maxZoom: 19 },
+    'esri_street': { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', attribution: '© Esri', maxZoom: 19 },
+    'esri_topo': { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', attribution: '© Esri', maxZoom: 19 },
+    'opentopo': { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: '© OpenTopoMap', maxZoom: 17 },
+    'stamen_toner': { url: 'https://tiles.stadiamaps.com/tiles/stamen_toner_lite/{z}/{x}/{y}.png', attribution: '© Stadia Maps', maxZoom: 18 }
+};
+
+let currentBasemap = 'osm';
+let currentTileLayer = null;
+
+const map = L.map('map').setView([33.5731, -7.5898], 12);
+
+currentTileLayer = L.tileLayer(BASEMAPS['osm'].url, {
+    attribution: BASEMAPS['osm'].attribution,
+    maxZoom: 19
+}).addTo(map);
+
+function changeBasemap() {
+    const selected = document.getElementById('basemap-select').value;
+    currentBasemap = selected;
+    if (currentTileLayer) map.removeLayer(currentTileLayer);
+    const config = BASEMAPS[selected];
+    currentTileLayer = L.tileLayer(config.url, {
+        attribution: config.attribution,
+        maxZoom: config.maxZoom || 19
+    }).addTo(map);
+    currentTileLayer.bringToBack();
+}
+
+let lineLayers = {};
+let stationLayer = null;
+let routeLayer = null;
+let lastRoute = null;
+
+const LINE_COLORS = {
+    'T1': '#E30613', 'T2': '#009639', 'T3': '#F7A800',
+    'T4': '#7B2D8E', 'BW1': '#54A057', 'BW2': '#A97B50'
+};
+
+async function loadLines() {
+    const response = await fetch('/api/lines');
+    const lines = await response.json();
+    
+    const legendContent = document.getElementById('legend-content');
+    legendContent.innerHTML = '';
+    
+    lines.forEach(line => {
+        const latlngs = line.coordinates.map(c => [c[0], c[1]]);
+        const polyline = L.polyline(latlngs, {
+            color: line.color, weight: 5, opacity: 0.8
+        }).addTo(map);
+        lineLayers[line.id] = polyline;
+        
+        const legendItem = document.createElement('div');
+        legendItem.className = 'legend-item';
+        legendItem.innerHTML = `<div class="legend-color" style="background: ${line.color};"></div><span>${line.id} - ${line.description}</span>`;
+        legendContent.appendChild(legendItem);
+    });
+}
+
+// ============================================================
+// ✅ CHARGEMENT DES STATIONS
+// ============================================================
+
+async function loadStations() {
+    const response = await fetch('/api/stations');
+    const stations = await response.json();
+    
+    console.log('=== STATIONS CHARGÉES ===');
+    console.log('Total:', stations.length);
+    
+    let corrCount = 0;
+    stations.forEach(s => { if (s.is_correspondance) corrCount++; });
+    console.log('Correspondances:', corrCount);
+    
+    stationLayer = L.layerGroup();
+    
+    stations.forEach(station => {
+        const isCorr = station.is_correspondance === true;
+        
+        let icon;
+        
+        if (isCorr) {
+            icon = L.divIcon({
+                className: 'correspondance-marker',
+                html: `
+                    <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
+                        <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: #ff9800; border: 3px solid white; box-shadow: 0 2px 8px rgba(255, 152, 0, 0.6);"></div>
+                        <i class="fas fa-exchange-alt" style="position: relative; color: white; font-size: 13px; z-index: 1;"></i>
+                    </div>
+                `,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+        } else {
+            icon = L.divIcon({
+                className: 'station-marker',
+                html: `<div style="width: 14px; height: 14px; border-radius: 50%; background: white; border: 2px solid #333; box-shadow: 0 1px 3px rgba(0,0,0,0.4);"></div>`,
+                iconSize: [14, 14],
+                iconAnchor: [7, 7]
+            });
+        }
+        
+        const marker = L.marker([station.lat, station.lon], { icon: icon });
+        
+        const linesStr = (station.lines || []).join(' / ');
+        const badgeColor = isCorr ? '#ff9800' : '#1e3c72';
+        
+        let corrHtml = '';
+        if (isCorr && station.correspondances && station.correspondances.length > 0) {
+            corrHtml = '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">';
+            corrHtml += '<div style="font-size: 11px; color: #ff9800; font-weight: 700; margin-bottom: 5px;">🔀 Correspondances :</div>';
+            station.correspondances.forEach(c => {
+                corrHtml += `<div style="font-size: 11px; color: #555; margin-bottom: 3px;">➜ <b>${c.line}</b> : ${c.station} <span style="color: #999;">(${c.walk_time} min à pied)</span></div>`;
+            });
+            corrHtml += '</div>';
+        }
+        
+        marker.bindPopup(`
+            <div style="font-family: -apple-system, sans-serif; min-width: 220px;">
+                <div style="background: ${badgeColor}; color: white; padding: 8px 12px; margin: -10px -10px 10px -10px; border-radius: 4px 4px 0 0; font-weight: 700; font-size: 13px;">
+                    ${isCorr ? '🔀 ' : '🚏 '}${station.name}
+                </div>
+                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                    <b>Ligne(s) :</b> ${linesStr}
+                </div>
+                ${corrHtml}
+                <div style="font-size: 10px; color: #999; margin-top: 8px; border-top: 1px solid #eee; padding-top: 5px;">
+                    📍 ${station.lat.toFixed(6)}, ${station.lon.toFixed(6)}
+                </div>
+            </div>
+        `);
+        
+        marker.addTo(stationLayer);
+        
+        const label = L.marker([station.lat, station.lon], {
+            icon: L.divIcon({
+                className: 'station-label',
+                html: `<div style="${isCorr ? 'background: #ff9800; color: white; border-color: #ff9800;' : ''}">${station.name}</div>`,
+                iconSize: null,
+                iconAnchor: [-16, 8]
+            }),
+            interactive: false
+        });
+        label.addTo(stationLayer);
+    });
+    
+    stationLayer.addTo(map);
+}
+
+let searchTimeout = null;
+
+function setupAutocomplete(inputId, listId) {
+    const input = document.getElementById(inputId);
+    const list = document.getElementById(listId);
+    
+    input.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        const query = input.value.trim();
+        if (query.length < 2) { list.classList.remove('show'); return; }
+        
+        searchTimeout = setTimeout(async () => {
+            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const results = await response.json();
+            if (results.length === 0) { list.classList.remove('show'); return; }
+            
+            list.innerHTML = '';
+            results.slice(0, 8).forEach(station => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.innerHTML = `<div class="station-name">${station.name}</div><div class="station-lines">Ligne(s): ${station.lines.join(' / ')}</div>`;
+                item.onclick = () => { input.value = station.name; list.classList.remove('show'); };
+                list.appendChild(item);
+            });
+            list.classList.add('show');
+        }, 200);
+    });
+    
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !list.contains(e.target)) list.classList.remove('show');
+    });
+}
+
+setupAutocomplete('start-input', 'start-list');
+setupAutocomplete('end-input', 'end-list');
+
+async function calculateRoute() {
+    const start = document.getElementById('start-input').value.trim();
+    const end = document.getElementById('end-input').value.trim();
+    
+    if (!start || !end) { alert('Veuillez entrer les deux stations'); return; }
+    
+    document.getElementById('loader').classList.add('show');
+    document.getElementById('result').classList.remove('show');
+    
+    if (routeLayer) map.removeLayer(routeLayer);
+    
+    try {
+        const response = await fetch('/api/route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start, end })
+        });
+        
+        const route = await response.json();
+        document.getElementById('loader').classList.remove('show');
+        
+        if (route.error) { showError(route.error); return; }
+        
+        lastRoute = route;
+        displayRoute(route);
+        drawRoute(route);
+    } catch (error) {
+        document.getElementById('loader').classList.remove('show');
+        showError('Erreur: ' + error.message);
+    }
+}
+
+function displayRoute(route) {
+    const result = document.getElementById('result');
+    let html = '';
+    
+    if (route.type === 'direct') {
+        const step = route.steps[0];
+        html += `<div class="result-header"><h3>✅ Itinéraire direct</h3><div class="result-stats"><span>⏱️ ${Math.round(route.total_time)} min</span><span>📏 ${route.total_distance_km.toFixed(2)} km</span><span>📊 ${route.total_stations} stations</span></div></div>`;
+        html += renderStep(step, 1);
+    } else if (route.type === 'with_transfer') {
+        const numTransfers = route.num_transfers || (route.num_lines - 1);
+        html += `<div class="result-header"><h3>🔀 Itinéraire avec ${numTransfers} correspondance(s)</h3><div class="result-stats"><span>⏱️ ${Math.round(route.total_time)} min</span><span>📏 ${route.total_distance_km.toFixed(2)} km</span><span>📊 ${route.total_stations} stations</span></div></div>`;
+        
+        let stepNum = 1;
+        route.steps.forEach(step => {
+            if (step.type === 'ride') { html += renderStep(step, stepNum); stepNum++; }
+            else if (step.type === 'transfer') {
+                html += `<div class="step transfer"><div class="step-title">🚶 Correspondance</div><div class="step-detail">Descendre à <b>${step.from_station}</b><br>Marcher <b>${step.walk_time} min</b> jusqu'à <b>${step.to_station}</b></div></div>`;
+            }
+        });
+    }
+    
+    result.innerHTML = html;
+    result.classList.add('show');
+}
+
+function renderStep(step, num) {
+    let stationsHtml = '';
+    if (step.stations && step.stations.length > 0) {
+        step.stations.forEach((s, i) => {
+            let cls = '';
+            if (i === 0) cls = 'start';
+            else if (i === step.stations.length - 1) cls = 'end';
+            stationsHtml += `<div class="station-item ${cls}"><div class="station-dot"></div><span>${s.name || 'Sans nom'}</span></div>`;
+        });
+    }
+    
+    return `<div class="step ride"><div class="step-title"><span class="line-badge" style="background: ${step.line_color || '#333'};">${step.line || 'N/A'}</span><span>Étape ${num}</span></div><div class="step-detail">De <b>${step.from || '?'}</b> → À <b>${step.to || '?'}</b><br>⏱️ ${Math.round(step.travel_time_min || 0)} min | 📊 ${step.num_stations || 0} stations</div><div class="stations-list">${stationsHtml}</div></div>`;
+}
+
+function drawRoute(route) {
+    routeLayer = L.layerGroup();
+    let allCoords = [];
+    
+    if (route.type === 'direct') {
+        const step = route.steps[0];
+        const coords = step.stations.map(s => [s.lat, s.lon]);
+        allCoords = coords;
+        
+        L.polyline(coords, { color: LINE_COLORS[step.line] || '#ff0000', weight: 8, opacity: 0.9 }).addTo(routeLayer);
+        
+        L.marker([step.stations[0].lat, step.stations[0].lon], {
+            icon: L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: #4caf50; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;"><i class="fas fa-play" style="color: white; font-size: 9px;"></i></div>',
+                iconSize: [24, 24], iconAnchor: [12, 12]
+            })
+        }).addTo(routeLayer);
+        
+        const last = step.stations[step.stations.length - 1];
+        L.marker([last.lat, last.lon], {
+            icon: L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: #f44336; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;"><i class="fas fa-flag-checkered" style="color: white; font-size: 9px;"></i></div>',
+                iconSize: [24, 24], iconAnchor: [12, 12]
+            })
+        }).addTo(routeLayer);
+    } else if (route.type === 'with_transfer') {
+        route.steps.forEach(step => {
+            if (step.type === 'ride') {
+                const coords = step.stations.map(s => [s.lat, s.lon]);
+                allCoords = allCoords.concat(coords);
+                L.polyline(coords, { color: LINE_COLORS[step.line] || '#ff0000', weight: 8, opacity: 0.9 }).addTo(routeLayer);
+            }
+        });
+        
+        const firstStep = route.steps[0];
+        const lastStep = route.steps[route.steps.length - 1];
+        const startStation = firstStep.stations[0];
+        const endStation = lastStep.stations[lastStep.stations.length - 1];
+        
+        L.marker([startStation.lat, startStation.lon], {
+            icon: L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: #4caf50; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;"><i class="fas fa-play" style="color: white; font-size: 9px;"></i></div>',
+                iconSize: [24, 24], iconAnchor: [12, 12]
+            })
+        }).addTo(routeLayer);
+        
+        L.marker([endStation.lat, endStation.lon], {
+            icon: L.divIcon({
+                className: 'custom-marker',
+                html: '<div style="background: #f44336; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;"><i class="fas fa-flag-checkered" style="color: white; font-size: 9px;"></i></div>',
+                iconSize: [24, 24], iconAnchor: [12, 12]
+            })
+        }).addTo(routeLayer);
+    }
+    
+    routeLayer.addTo(map);
+    if (allCoords.length > 0) map.fitBounds(L.latLngBounds(allCoords), { padding: [50, 50] });
+}
+
+async function downloadPDF() {
+    const downloadBtn = document.getElementById('download-btn');
+    const originalText = downloadBtn.innerHTML;
+    
+    if (!lastRoute) { alert('❌ Veuillez d\'abord calculer un itinéraire'); return; }
+    
+    downloadBtn.innerHTML = '⏳ Génération PDF...';
+    downloadBtn.disabled = true;
+    
+    try {
+        const route = lastRoute;
+        const start = document.getElementById('start-input').value;
+        const end = document.getElementById('end-input').value;
+        
+        const response = await fetch('/api/static-map', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ route: route, basemap: currentBasemap })
+        });
+        
+        if (!response.ok) throw new Error('Erreur serveur: ' + response.status);
+        
+        const imageBlob = await response.blob();
+        const mapImageData = await blobToBase64(imageBlob);
+        
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const margin = 15;
+        
+        pdf.setFillColor(30, 60, 114);
+        pdf.rect(0, 0, pageWidth, 30, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(18);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Itinéraire Tramway Casablanca', margin, 13);
+        
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(`${start}  ->  ${end}`, margin, 21);
+        
+        pdf.setFontSize(9);
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+        pdf.text(dateStr, pageWidth - margin, 21, { align: 'right' });
+        
+        pdf.setFontSize(7);
+        pdf.setTextColor(220, 220, 220);
+        pdf.text('Mohamed AIT ABDELMALIK - MSc Geoinformatics', pageWidth - margin, 24, { align: 'right' });
+        pdf.text('Geospatial Data Science | GeoAI & ML', pageWidth - margin, 27, { align: 'right' });
+        
+        let yPos = 40;
+        
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        
+        if (route.type === 'direct') {
+            const step = route.steps[0];
+            pdf.text(`Trajet direct - Ligne ${step.line}`, margin, yPos);
+            yPos += 7;
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(`Temps: ${Math.round(route.total_time)} min  |  Distance: ${route.total_distance_km.toFixed(2)} km  |  Stations: ${route.total_stations}`, margin, yPos);
+        } else {
+            const numTransfers = route.num_transfers || (route.num_lines - 1);
+            pdf.text(`Itinéraire avec ${numTransfers} correspondance(s)`, margin, yPos);
+            yPos += 7;
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(`Temps: ${Math.round(route.total_time)} min  |  Distance: ${route.total_distance_km.toFixed(2)} km  |  Stations: ${route.total_stations}`, margin, yPos);
+        }
+        
+        yPos += 10;
+        
+        const imgWidth = pageWidth - (margin * 2);
+        const imgHeight = (900 / 1400) * imgWidth;
+        
+        pdf.addImage(mapImageData, 'PNG', margin, yPos, imgWidth, imgHeight);
+        yPos += imgHeight + 8;
+        
+        pdf.addPage();
+        yPos = 20;
+        
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(30, 60, 114);
+        pdf.text('Détails de l\'itinéraire', margin, yPos);
+        yPos += 15;
+        
+        let stepNum = 1;
+        
+        if (route.type === 'direct' && route.steps.length > 0) {
+            const step = route.steps[0];
+            const line = step.line || 'N/A';
+            const lineColor = LINE_COLORS[line] || '#1e3c72';
+            const hex = lineColor.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            pdf.setFillColor(r, g, b);
+            pdf.rect(margin, yPos - 5, 15, 7, 'F');
+            
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(line, margin + 7.5, yPos, { align: 'center' });
+            
+            pdf.setTextColor(0, 0, 0);
+            pdf.setFontSize(10);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text(`Etape 1 : ${step.from || start} -> ${step.to || end}`, margin + 20, yPos);
+            yPos += 6;
+            
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(80, 80, 80);
+            const stationsCount = (step.stations && step.stations.length) ? step.stations.length : (route.total_stations || 0);
+            pdf.text(`${Math.round(step.travel_time_min || route.total_time || 0)} min  |  ${stationsCount} stations`, margin + 20, yPos);
+            yPos += 8;
+            
+            pdf.setFontSize(9);
+            pdf.setTextColor(50, 50, 50);
+            
+            if (step.stations && step.stations.length > 0) {
+                step.stations.forEach((s, j) => {
+                    if (yPos > pageHeight - 15) { pdf.addPage(); yPos = 20; }
+                    if (j === 0) pdf.setFillColor(76, 175, 80);
+                    else if (j === step.stations.length - 1) pdf.setFillColor(244, 67, 54);
+                    else pdf.setFillColor(150, 150, 150);
+                    pdf.circle(margin + 22, yPos - 1, 1.2, 'F');
+                    pdf.text(`${j + 1}. ${s.name || 'Sans nom'}`, margin + 26, yPos);
+                    yPos += 5;
+                });
+            }
+        } else {
+            for (let i = 0; i < route.steps.length; i++) {
+                const step = route.steps[i];
+                
+                if (step.type === 'ride') {
+                    if (yPos > pageHeight - 50) { pdf.addPage(); yPos = 20; }
+                    
+                    const line = step.line || 'N/A';
+                    const lineColor = LINE_COLORS[line] || '#1e3c72';
+                    const hex = lineColor.replace('#', '');
+                    const r = parseInt(hex.substr(0, 2), 16);
+                    const g = parseInt(hex.substr(2, 2), 16);
+                    const b = parseInt(hex.substr(4, 2), 16);
+                    pdf.setFillColor(r, g, b);
+                    pdf.rect(margin, yPos - 5, 15, 7, 'F');
+                    
+                    pdf.setTextColor(255, 255, 255);
+                    pdf.setFontSize(9);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text(line, margin + 7.5, yPos, { align: 'center' });
+                    
+                    pdf.setTextColor(0, 0, 0);
+                    pdf.setFontSize(10);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text(`Etape ${stepNum} : ${step.from || '?'} -> ${step.to || '?'}`, margin + 20, yPos);
+                    yPos += 6;
+                    
+                    pdf.setFontSize(9);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(80, 80, 80);
+                    const stationsCount = (step.stations && step.stations.length) ? step.stations.length : 0;
+                    pdf.text(`${Math.round(step.travel_time_min || 0)} min  |  ${stationsCount} stations`, margin + 20, yPos);
+                    yPos += 8;
+                    
+                    pdf.setFontSize(9);
+                    pdf.setTextColor(50, 50, 50);
+                    
+                    if (step.stations && step.stations.length > 0) {
+                        step.stations.forEach((s, j) => {
+                            if (yPos > pageHeight - 15) { pdf.addPage(); yPos = 20; }
+                            if (j === 0) pdf.setFillColor(76, 175, 80);
+                            else if (j === step.stations.length - 1) pdf.setFillColor(244, 67, 54);
+                            else pdf.setFillColor(150, 150, 150);
+                            pdf.circle(margin + 22, yPos - 1, 1.2, 'F');
+                            pdf.text(`${j + 1}. ${s.name || 'Sans nom'}`, margin + 26, yPos);
+                            yPos += 5;
+                        });
+                    }
+                    
+                    yPos += 6;
+                    stepNum++;
+                    
+                } else if (step.type === 'transfer') {
+                    if (yPos > pageHeight - 20) { pdf.addPage(); yPos = 20; }
+                    
+                    pdf.setFillColor(255, 243, 224);
+                    pdf.rect(margin, yPos - 4, pageWidth - (margin * 2), 12, 'F');
+                    
+                    pdf.setTextColor(230, 126, 34);
+                    pdf.setFontSize(10);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text(`Correspondance : ${step.from_station || '?'} -> ${step.to_station || '?'}`, margin + 3, yPos + 2);
+                    
+                    pdf.setFontSize(9);
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setTextColor(120, 120, 120);
+                    pdf.text(`Marche : ${step.walk_time || 0} min`, margin + 3, yPos + 8);
+                    
+                    yPos += 16;
+                }
+            }
+        }
+        
+        pdf.addPage();
+        
+        pdf.setFillColor(30, 60, 114);
+        pdf.rect(0, 0, pageWidth, 40, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(20);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('À propos de l\'auteur', margin, 20);
+        
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text('Informations de contact et liens professionnels', margin, 30);
+        
+        pdf.setFillColor(56, 239, 125);
+        pdf.circle(margin + 15, 60, 12, 'F');
+        
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('MA', margin + 10, 62);
+        
+        pdf.setTextColor(30, 60, 114);
+        pdf.setFontSize(16);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Mohamed AIT ABDELMALIK', margin + 32, 55);
+        
+        pdf.setTextColor(80, 80, 80);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text('MSc Geoinformatics @UH2C', margin + 32, 62);
+        pdf.text('Geospatial Data Science | GeoAI & ML', margin + 32, 68);
+        pdf.text('GIS & Remote Sensing | Geospatial Computing', margin + 32, 74);
+        pdf.text('Spatial Intelligence', margin + 32, 80);
+        
+        pdf.setTextColor(100, 100, 100);
+        pdf.setFontSize(10);
+        pdf.text('Casablanca Metropolitan Area', margin + 32, 87);
+        
+        let contactY = 105;
+        
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(30, 60, 114);
+        pdf.text('Contact', margin, contactY);
+        contactY += 8;
+        
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(0, 0, 0);
+        
+        pdf.text('Email      :  mohamed.aitabdelmalik@gmail.com', margin, contactY);
+        contactY += 7;
+        pdf.text('Téléphone  :  +212 6 51853618', margin, contactY);
+        contactY += 7;
+        pdf.text('Localisation: Casablanca Metropolitan Area', margin, contactY);
+        
+        contactY += 15;
+        
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(30, 60, 114);
+        pdf.text('Réseaux sociaux & Portfolio', margin, contactY);
+        contactY += 10;
+        
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        
+        pdf.setFillColor(0, 119, 181);
+        pdf.rect(margin, contactY - 5, 30, 7, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.text('LinkedIn', margin + 2, contactY);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text('linkedin.com/in/mohamed-ait-abdelmalik-a7b468195', margin + 35, contactY);
+        contactY += 12;
+        
+        pdf.setFillColor(51, 51, 51);
+        pdf.rect(margin, contactY - 5, 30, 7, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.text('GitHub', margin + 2, contactY);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text('github.com/mohamed-aitabdelmalik', margin + 35, contactY);
+        contactY += 12;
+        
+        pdf.setFillColor(0, 0, 0);
+        pdf.rect(margin, contactY - 5, 30, 7, 'F');
+        pdf.setTextColor(255, 255, 255);
+        pdf.text('Twitter/X', margin + 2, contactY);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text('x.com/MoAitAbdelmalik', margin + 35, contactY);
+        contactY += 12;
+        
+        pdf.setFillColor(56, 239, 125);
+        pdf.rect(margin, contactY - 5, 30, 7, 'F');
+        pdf.setTextColor(30, 60, 114);
+        pdf.text('Portfolio', margin + 2, contactY);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text('mohamed-ait-abdelmalik.site', margin + 35, contactY);
+        contactY += 20;
+        
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(30, 60, 114);
+        pdf.text('Scanner pour visiter le portfolio', margin, contactY);
+        contactY += 5;
+        
+        const qrDataUrl = await generateQRCode('https://mohamed-ait-abdelmalik.site/');
+        
+        if (qrDataUrl) {
+            pdf.addImage(qrDataUrl, 'PNG', margin, contactY, 40, 40);
+            pdf.setFontSize(9);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(80, 80, 80);
+            pdf.text('Scannez ce QR code avec', margin + 45, contactY + 12);
+            pdf.text('votre téléphone pour', margin + 45, contactY + 18);
+            pdf.text('découvrir mon portfolio.', margin + 45, contactY + 24);
+        }
+        
+        const totalPages = pdf.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            pdf.setPage(i);
+            pdf.setFillColor(30, 60, 114);
+            pdf.rect(0, pageHeight - 10, pageWidth, 10, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(8);
+            pdf.text(`Tramway Casablanca © ${new Date().getFullYear()}  -  Mohamed AIT ABDELMALIK  -  Page ${i}/${totalPages}`, pageWidth / 2, pageHeight - 4, { align: 'center' });
+        }
+        
+        const filename = `Itineraire_${start.replace(/\s+/g, '_')}_${end.replace(/\s+/g, '_')}.pdf`;
+        pdf.save(filename);
+        
+        downloadBtn.innerHTML = '✅ PDF créé !';
+        setTimeout(() => { downloadBtn.innerHTML = originalText; downloadBtn.disabled = false; }, 2000);
+    } catch (error) {
+        console.error('Erreur PDF:', error);
+        alert('❌ Erreur : ' + error.message);
+        downloadBtn.innerHTML = originalText;
+        downloadBtn.disabled = false;
+    }
+}
+
+function generateQRCode(text) {
+    return new Promise((resolve) => {
+        try {
+            const container = document.createElement('div');
+            container.style.display = 'none';
+            document.body.appendChild(container);
+            
+            new QRCode(container, {
+                text: text, width: 256, height: 256,
+                colorDark: '#1e3c72', colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            
+            setTimeout(() => {
+                const canvas = container.querySelector('canvas');
+                if (canvas) {
+                    const dataUrl = canvas.toDataURL('image/png');
+                    document.body.removeChild(container);
+                    resolve(dataUrl);
+                } else {
+                    document.body.removeChild(container);
+                    resolve(null);
+                }
+            }, 100);
+        } catch (e) { console.error('QR code error:', e); resolve(null); }
+    });
+}
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+function resetRoute() {
+    document.getElementById('start-input').value = '';
+    document.getElementById('end-input').value = '';
+    document.getElementById('result').classList.remove('show');
+    lastRoute = null;
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+    map.setView([33.5731, -7.5898], 12);
+}
+
+function locateMe() {
+    if (!navigator.geolocation) { alert('Géolocalisation non supportée'); return; }
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            const response = await fetch(`/api/nearest?lat=${lat}&lon=${lon}`);
+            const data = await response.json();
+            if (data.error) { alert('Aucune station trouvée à proximité'); return; }
+            document.getElementById('start-input').value = data.name;
+            alert(`Station la plus proche: ${data.name} (${Math.round(data.distance_m)} m)`);
+        },
+        (error) => alert('Erreur GPS: ' + error.message)
+    );
+}
+
+function showError(message) {
+    const result = document.getElementById('result');
+    result.innerHTML = `<div class="result-header" style="background: #ffebee;"><h3 style="color: #c62828;">❌ Erreur</h3><p style="font-size: 13px; color: #555; margin-top: 8px;">${message}</p></div>`;
+    result.classList.add('show');
+}
+
+loadLines();
+loadStations();
+
+console.log('🚊 Application Tramway Casablanca chargée !');
+</script>
+
+</body>
+</html>

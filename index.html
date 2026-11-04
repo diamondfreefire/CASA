@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tramway Casablanca – Carte interactive et calcul d'itinéraire</title>
+    <meta name="description" content="Calculez votre itinéraire en tramway et busway à Casablanca (T1, T2, T3, T4, BW1, BW2) : carte interactive, correspondances, temps de trajet et export PDF.">
+    <meta name="theme-color" content="#1e3c72">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+    <meta property="og:title" content="Tramway Casablanca – Carte interactive">
+    <meta property="og:description" content="Itinéraires T1–T4 et BW1–BW2 avec tronçon exact surligné sur la carte.">
+    <meta property="og:type" content="website">
+
+    <link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<div id="app">
+    <aside id="sidebar">
+        <header id="sidebar-header">
+            <div class="titles">
+                <h1>🚊 Tramway Casablanca</h1>
+                <p>Calculateur d'itinéraire T1–T4 &amp; BW1–BW2</p>
+            </div>
+            <button id="sheet-toggle" type="button" aria-label="Afficher / masquer le panneau" aria-expanded="true">▾</button>
+        </header>
+
+        <div id="sidebar-content">
+            <form id="route-form" autocomplete="off">
+                <div class="od-block">
+                    <div class="form-group">
+                        <label for="start-input">📍 Station de départ</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="start-input" placeholder="Ex : Aïn Diab" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="start-list">
+                            <div class="autocomplete-list" id="start-list" role="listbox"></div>
+                        </div>
+                    </div>
+                    <button type="button" class="swap" id="swap-btn" title="Inverser départ et arrivée" aria-label="Inverser départ et arrivée">⇅</button>
+                    <div class="form-group">
+                        <label for="end-input">🎯 Station d'arrivée</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="end-input" placeholder="Ex : Faculté Ben M'Sick" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="end-list">
+                            <div class="autocomplete-list" id="end-list" role="listbox"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="basemap-select">🗺️ Fond de carte</label>
+                    <select id="basemap-select">
+                        <option value="osm">🗺️ OpenStreetMap</option>
+                        <option value="carto_light">⚪ Carto clair (lisible)</option>
+                        <option value="carto_dark">⚫ Carto sombre</option>
+                        <option value="esri_satellite">📡 Esri Satellite (photos réelles)</option>
+                        <option value="esri_street">🛣️ Esri Street Map</option>
+                        <option value="esri_topo">⛰️ Esri Topographique</option>
+                        <option value="opentopo">🏔️ OpenTopoMap</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="calc-btn">🗺️ Calculer l'itinéraire</button>
+                <div class="btn-row">
+                    <button type="button" class="btn btn-secondary" id="reset-btn">🔄 Réinitialiser</button>
+                    <button type="button" class="btn btn-secondary" id="gps-btn">📍 Ma position</button>
+                </div>
+                <button type="button" class="btn btn-success" id="download-btn">📄 Télécharger le PDF</button>
+            </form>
+
+            <div id="result" aria-live="polite"></div>
+        </div>
+
+        <footer id="sidebar-footer">
+            © <span id="year"></span> Tramway Casablanca – par
+            <a href="https://mohamed-ait-abdelmalik.site/" target="_blank" rel="noopener">Mohamed AIT ABDELMALIK</a>
+        </footer>
+    </aside>
+
+    <main id="map" aria-label="Carte du réseau de tramway"></main>
+</div>
+
+<div id="author-panel">
+    <button class="author-close" type="button" id="author-close" title="Fermer" aria-label="Fermer"><i class="fas fa-times"></i></button>
+
+    <div class="author-header">
+        <div class="author-avatar"><i class="fas fa-user-graduate"></i></div>
+        <div class="author-info">
+            <h3>Mohamed AIT ABDELMALIK</h3>
+            <p>MSc Geoinformatics @UH2C</p>
+            <p>Geospatial Data Science | GeoAI &amp; ML</p>
+            <p>GIS &amp; Remote Sensing | Geospatial Computing</p>
+            <p>Spatial Intelligence</p>
+        </div>
+    </div>
+
+    <div class="author-location">
+        <i class="fas fa-map-marker-alt"></i>
+        <span>Casablanca Metropolitan Area</span>
+    </div>
+
+    <div class="social-links">
+        <a href="mailto:mohamed.aitabdelmalik@gmail.com" class="email" title="Email"><i class="fas fa-envelope"></i></a>
+        <a href="tel:+212651853618" class="phone" title="Téléphone"><i class="fas fa-phone"></i></a>
+        <a href="https://www.linkedin.com/in/mohamed-ait-abdelmalik-a7b468195/" class="linkedin" title="LinkedIn" target="_blank" rel="noopener"><i class="fab fa-linkedin-in"></i></a>
+        <a href="https://github.com/mohamed-aitabdelmalik" class="github" title="GitHub" target="_blank" rel="noopener"><i class="fab fa-github"></i></a>
+        <a href="https://x.com/MoAitAbdelmalik" class="twitter" title="Twitter/X" target="_blank" rel="noopener"><i class="fab fa-twitter"></i></a>
+        <a href="https://mohamed-ait-abdelmalik.site/" class="website" title="Portfolio" target="_blank" rel="noopener"><i class="fas fa-globe"></i></a>
+    </div>
+</div>
+
+<div id="legend">
+    <h4 class="legend-title" id="legend-title" role="button" tabindex="0" aria-label="Afficher / masquer la légende">🚊 Lignes</h4>
+    <div class="legend-body">
+        <div id="legend-content"></div>
+        <div class="legend-hint">Cliquez sur une ligne pour l'afficher / la masquer</div>
+        <div class="legend-sub">
+            <h4>🚏 Stations</h4>
+            <div class="legend-row"><div class="l-dot"></div><span>Station normale</span></div>
+            <div class="legend-row"><div class="l-corr">⇄</div><span>Correspondance</span></div>
+        </div>
+    </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script src="assets/vendor/leaflet/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
+<script src="assets/js/router.js"></script>
+<script src="assets/js/staticmap.js"></script>
+<script src="assets/js/pdf.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
